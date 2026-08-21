@@ -44,9 +44,13 @@ sudo ./xray-reality.sh install
 ```bash
 sudo ./xray-reality.sh install \
   --port 443 \
-  --sni learn.microsoft.com \
+  --sni www.bing.com \
   --yes
 ```
+
+交互安装未通过 `--sni` 或 `SNI` 指定目标时，会提示输入 REALITY SNI；直接回车使用默认值 `www.bing.com`。非交互安装添加 `--yes` 后同样使用该默认值。
+
+Interactive installs prompt for a REALITY SNI unless `--sni` or the `SNI` environment variable is provided. Press Enter to accept the `www.bing.com` default; unattended installs with `--yes` use the same default.
 
 IPv6-only VPS 可以明确指定：
 
@@ -83,7 +87,7 @@ xray-reality uninstall
 
 ```text
 --port PORT          服务端端口，默认 443
---sni DOMAIN         REALITY 目标，默认 learn.microsoft.com
+--sni DOMAIN         REALITY 目标，默认 www.bing.com
 --address ADDRESS    客户端连接地址，默认自动探测
 --listen ADDRESS     Xray 监听地址
 --uuid UUID          使用指定 UUID；默认随机生成

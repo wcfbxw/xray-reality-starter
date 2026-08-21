@@ -3,6 +3,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly DEFAULT_XRAY_VERSION="v26.3.27"
+readonly DEFAULT_SNI="www.bing.com"
 readonly INSTALLER_COMMIT="e741a4f56d368afbb9e5be3361b40c4552d3710d"
 readonly INSTALLER_SHA256="7f70c95f6b418da8b4f4883343d602964915e28748993870fd554383afdbe555"
 readonly INSTALLER_URL="https://raw.githubusercontent.com/XTLS/Xray-install/${INSTALLER_COMMIT}/install-release.sh"
@@ -15,7 +16,9 @@ readonly MANAGER_BIN="/usr/local/sbin/xray-reality"
 
 COMMAND="install"
 PORT="${PORT:-443}"
-SNI="${SNI:-learn.microsoft.com}"
+SNI_EXPLICIT=0
+[[ -n "${SNI:-}" ]] && SNI_EXPLICIT=1
+SNI="${SNI:-${DEFAULT_SNI}}"
 ADDRESS="${ADDRESS:-}"
 LISTEN="${LISTEN:-}"
 UUID="${UUID:-}"
@@ -51,7 +54,7 @@ usage() {
 
 安装选项：
   --port PORT          入站端口，默认 443
-  --sni DOMAIN         REALITY 目标域名，默认 learn.microsoft.com
+  --sni DOMAIN         REALITY 目标域名，默认 www.bing.com
   --address ADDRESS    客户端连接的公网 IP 或域名，默认自动探测
   --listen ADDRESS     服务端监听地址，默认根据公网地址选择 0.0.0.0 或 ::
   --uuid UUID          指定 UUID，默认由 Xray 随机生成
@@ -62,6 +65,7 @@ usage() {
   -h, --help           显示帮助
 
 环境变量也可以使用同名的大写变量，例如 PORT、SNI、ADDRESS、XRAY_VERSION。
+交互安装未指定 SNI 时会提示输入；直接回车使用 www.bing.com。
 EOF
 }
 
@@ -91,6 +95,18 @@ confirm() {
   local answer
   read -r -p "${prompt} [y/N] " answer
   [[ "${answer}" =~ ^[Yy]$ ]] || die "操作已取消。"
+}
+
+prompt_sni() {
+  (( ASSUME_YES == 1 || SNI_EXPLICIT == 1 )) && return 0
+  [[ -t 0 ]] || die "非交互运行必须添加 --yes 或使用 --sni 指定目标域名。"
+
+  local input
+  read -r -p "REALITY SNI [${SNI}]: " input
+  if [[ -n "${input}" ]]; then
+    SNI="${input}"
+  fi
+  return 0
 }
 
 validate_port() {
@@ -460,6 +476,7 @@ uninstall_all() {
 run_install() {
   require_root
   require_linux_systemd
+  prompt_sni
   validate_install_options
 
   [[ -f "${XRAY_CONFIG}" ]] && warn "现有 ${XRAY_CONFIG} 将先备份，再由新配置替换。"
@@ -493,7 +510,7 @@ parse_args() {
   while (($# > 0)); do
     case "$1" in
       --port) [[ $# -ge 2 ]] || die "--port 缺少值"; PORT="$2"; shift 2 ;;
-      --sni) [[ $# -ge 2 ]] || die "--sni 缺少值"; SNI="$2"; shift 2 ;;
+      --sni) [[ $# -ge 2 ]] || die "--sni 缺少值"; SNI="$2"; SNI_EXPLICIT=1; shift 2 ;;
       --address) [[ $# -ge 2 ]] || die "--address 缺少值"; ADDRESS="$2"; shift 2 ;;
       --listen) [[ $# -ge 2 ]] || die "--listen 缺少值"; LISTEN="$2"; shift 2 ;;
       --uuid) [[ $# -ge 2 ]] || die "--uuid 缺少值"; UUID="$2"; shift 2 ;;
