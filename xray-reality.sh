@@ -33,9 +33,10 @@ die() { printf '\033[31m[x]\033[0m %s\n' "$*" >&2; exit 1; }
 
 cleanup() {
   local path
-  for path in "${TEMP_FILES[@]:-}"; do
+  for path in "${TEMP_FILES[@]}"; do
     [[ -n "${path}" && -e "${path}" ]] && rm -f -- "${path}"
   done
+  return 0
 }
 trap cleanup EXIT
 
