@@ -120,7 +120,17 @@ bash -n xray-reality.sh
 shellcheck xray-reality.sh
 ```
 
-GitHub Actions 会在提交和 Pull Request 时运行 ShellCheck。
+仓库提供了 `ci/lint.yml.example`。启用 GitHub Actions 时，将它复制到工作流目录后提交：
+
+```bash
+mkdir -p .github/workflows
+cp ci/lint.yml.example .github/workflows/lint.yml
+git add -- .github/workflows/lint.yml
+git commit -m "ci: enable ShellCheck workflow"
+git push
+```
+
+提交工作流文件的 GitHub CLI/OAuth 令牌需要 `workflow` 权限。
 
 ## 上游项目
 
