@@ -95,9 +95,25 @@ xray-reality uninstall
 
 也可以使用 `PORT`、`SNI`、`ADDRESS`、`LISTEN`、`UUID`、`XRAY_VERSION`、`FINGERPRINT` 环境变量。
 
+## 已验证环境 / Tested environment
+
+2026-08-21 在全新 Oracle Cloud Ubuntu 24.04.4 LTS、systemd、x86_64 环境完成了以下测试：
+
+- 全新安装和 Xray 配置校验。
+- systemd 启动、启用及 TCP 443 外部连通性。
+- Windows Xray 客户端通过 REALITY 节点访问公网，出口地址与 VPS 一致。
+- 同版本 `update`、`show`、`help` 管理命令。
+- Oracle Ubuntu 默认 iptables 规则下手动放行并持久化 TCP 443。
+
+Tested on a fresh Oracle Cloud Ubuntu 24.04.4 LTS x86_64 instance with systemd. Installation, configuration validation, service startup, external TCP connectivity, end-to-end REALITY proxying, same-version updates, and management commands passed.
+
+尚未完成 Debian 12 和完整卸载后重装测试。
+
+Debian 12 and a full uninstall/reinstall cycle have not been tested yet.
+
 ## 发布前必须做的事
 
-1. 在全新的 Debian 12 和 Ubuntu 24.04 VPS 上各测试一次。
+1. 在全新的 Debian 12 上测试，并完成一次卸载后重装测试。
 2. 确认 TCP 入站端口已通过云防火墙和本机防火墙放行。
 3. 检查选择的 SNI 目标支持 TLS 1.3，并可从服务器直连。
 4. 给仓库打 Git tag，让用户下载固定版本而不是 `main`。
