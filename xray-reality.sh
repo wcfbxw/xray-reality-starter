@@ -13,6 +13,8 @@ readonly STATE_DIR="/usr/local/etc/xray-reality"
 readonly STATE_FILE="${STATE_DIR}/state.json"
 readonly BACKUP_DIR="${STATE_DIR}/backups"
 readonly MANAGER_BIN="/usr/local/sbin/xray-reality"
+readonly BBR_SYSCTL_FILE="/etc/sysctl.d/99-xray-reality-bbr.conf"
+readonly BBR_MODULE_FILE="/etc/modules-load.d/xray-reality-bbr.conf"
 
 COMMAND="install"
 PORT="${PORT:-443}"
@@ -25,7 +27,7 @@ UUID="${UUID:-}"
 XRAY_VERSION="${XRAY_VERSION:-${DEFAULT_XRAY_VERSION}}"
 FINGERPRINT="${FINGERPRINT:-chrome}"
 ASSUME_YES=0
-ENABLE_BBR=0
+ENABLE_BBR="${ENABLE_BBR:-1}"
 BACKUP_CONFIG=""
 DOWNLOADED_INSTALLER=""
 TEMP_FILES=()
@@ -60,11 +62,13 @@ usage() {
   --uuid UUID          指定 UUID，默认由 Xray 随机生成
   --version VERSION    Xray 版本，默认 v26.3.27
   --fingerprint NAME   客户端指纹，默认 chrome
-  --enable-bbr         写入独立的 BBR sysctl 配置
+  --enable-bbr         启用 BBR + fq（默认，保留用于兼容）
+  --disable-bbr        本次安装不启用 BBR
   --yes                非交互确认
   -h, --help           显示帮助
 
 环境变量也可以使用同名的大写变量，例如 PORT、SNI、ADDRESS、XRAY_VERSION。
+设置 ENABLE_BBR=0 可以关闭默认的 BBR 配置。
 交互安装未指定 SNI 时会提示输入；直接回车使用 www.bing.com。
 EOF
 }
@@ -156,6 +160,11 @@ validate_fingerprint() {
   esac
 }
 
+validate_bbr_option() {
+  [[ "${ENABLE_BBR}" == "0" || "${ENABLE_BBR}" == "1" ]] || \
+    die "ENABLE_BBR 只能是 0 或 1。"
+}
+
 validate_install_options() {
   validate_port
   validate_domain
@@ -164,6 +173,7 @@ validate_install_options() {
   validate_address
   validate_listen
   validate_fingerprint
+  validate_bbr_option
 }
 
 install_dependencies() {
@@ -171,7 +181,7 @@ install_dependencies() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   apt-get install -y --no-install-recommends \
-    ca-certificates curl jq openssl qrencode iproute2
+    ca-certificates curl jq openssl qrencode iproute2 kmod procps
 }
 
 download_installer() {
@@ -343,15 +353,30 @@ activate_config() {
 }
 
 enable_bbr() {
-  (( ENABLE_BBR == 1 )) || return 0
+  if (( ENABLE_BBR != 1 )); then
+    info "按参数跳过 BBR 配置"
+    return 0
+  fi
+
   info "启用 BBR + fq"
-  cat >/etc/sysctl.d/99-xray-reality-bbr.conf <<'EOF'
+  if ! modprobe tcp_bbr; then
+    warn "当前内核没有可用的 tcp_bbr 模块，跳过 BBR；Xray 安装不受影响。"
+    ENABLE_BBR=0
+    return 0
+  fi
+
+  cat >"${BBR_SYSCTL_FILE}" <<'EOF'
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 EOF
-  printf 'tcp_bbr\n' >/etc/modules-load.d/xray-reality-bbr.conf
-  modprobe tcp_bbr 2>/dev/null || true
-  sysctl --system >/dev/null
+  printf 'tcp_bbr\n' >"${BBR_MODULE_FILE}"
+  sysctl -p "${BBR_SYSCTL_FILE}" >/dev/null || die "无法应用 BBR 内核参数。"
+
+  [[ "$(sysctl -n net.ipv4.tcp_congestion_control)" == "bbr" ]] || \
+    die "BBR 配置写入后未生效。"
+  [[ "$(sysctl -n net.core.default_qdisc)" == "fq" ]] || \
+    die "fq 队列配置写入后未生效。"
+  info "BBR + fq 已生效并设置为开机自动加载"
 }
 
 write_state() {
@@ -465,8 +490,8 @@ uninstall_all() {
     cp -a -- "${STATE_DIR}" "${preserved_state}"
     chmod -R go-rwx "${preserved_state}"
   fi
-  rm -f -- /etc/sysctl.d/99-xray-reality-bbr.conf
-  rm -f -- /etc/modules-load.d/xray-reality-bbr.conf
+  rm -f -- "${BBR_SYSCTL_FILE}"
+  rm -f -- "${BBR_MODULE_FILE}"
   rm -rf -- "${STATE_DIR}"
   rm -f -- "${MANAGER_BIN}"
   info "卸载完成。"
@@ -480,8 +505,8 @@ run_install() {
   validate_install_options
 
   [[ -f "${XRAY_CONFIG}" ]] && warn "现有 ${XRAY_CONFIG} 将先备份，再由新配置替换。"
-  printf '\n将部署：Xray %s / VLESS + TCP + REALITY + Vision\n端口：%s\nSNI：%s\n\n' \
-    "${XRAY_VERSION}" "${PORT}" "${SNI}"
+  printf '\n将部署：Xray %s / VLESS + TCP + REALITY + Vision\n端口：%s\nSNI：%s\nBBR：%s\n\n' \
+    "${XRAY_VERSION}" "${PORT}" "${SNI}" "$([[ ${ENABLE_BBR} -eq 1 ]] && printf '默认开启' || printf '关闭')"
   confirm "继续安装？"
 
   install_dependencies
@@ -517,6 +542,7 @@ parse_args() {
       --version) [[ $# -ge 2 ]] || die "--version 缺少值"; XRAY_VERSION="$2"; shift 2 ;;
       --fingerprint) [[ $# -ge 2 ]] || die "--fingerprint 缺少值"; FINGERPRINT="$2"; shift 2 ;;
       --enable-bbr) ENABLE_BBR=1; shift ;;
+      --disable-bbr) ENABLE_BBR=0; shift ;;
       --yes) ASSUME_YES=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "未知参数：$1" ;;

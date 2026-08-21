@@ -2,9 +2,9 @@
 
 ## 项目简介 / Introduction
 
-**中文：** 一个安全优先、可审计的 Xray 一键部署与管理脚本，用于在 Debian/Ubuntu 上部署单用户 VLESS + TCP + XTLS Vision + REALITY。它默认采用随机凭据、固定上游版本、安装器校验、配置备份和失败回滚，不默认安装 WARP，也不自动修改防火墙。
+**中文：** 一个安全优先、可审计的 Xray 一键部署与管理脚本，用于在 Debian/Ubuntu 上部署单用户 VLESS + TCP + XTLS Vision + REALITY。它默认采用随机凭据、固定上游版本、安装器校验、配置备份、失败回滚和 BBR + fq，不默认安装 WARP，也不自动修改防火墙。
 
-**English:** A safety-focused, auditable Xray deployment and management script for running single-user VLESS + TCP + XTLS Vision + REALITY on Debian/Ubuntu. It uses random credentials, pinned upstream versions, installer checksum verification, configuration backups, and automatic rollback by default. It does not install WARP or modify firewall rules automatically.
+**English:** A safety-focused, auditable Xray deployment and management script for running single-user VLESS + TCP + XTLS Vision + REALITY on Debian/Ubuntu. It uses random credentials, pinned upstream versions, installer checksum verification, configuration backups, automatic rollback, and BBR + fq by default. It does not install WARP or modify firewall rules automatically.
 
 部署协议栈 / Protocol stack：
 
@@ -25,7 +25,7 @@ The first release supports Debian/Ubuntu systems running systemd. This project i
 - 覆盖 Xray 配置前自动备份。
 - 写入配置前运行 `xray run -test`。
 - 启动失败时自动恢复旧配置。
-- BBR 为可选功能，不默认修改内核参数。
+- 默认启用 BBR + fq，并写入独立的开机持久化配置；可通过 `--disable-bbr` 关闭。
 - 不自动修改防火墙，也不自动安装 WARP。
 
 ## 快速开始
@@ -49,6 +49,8 @@ sudo ./xray-reality.sh install \
 ```
 
 交互安装未通过 `--sni` 或 `SNI` 指定目标时，会提示输入 REALITY SNI；直接回车使用默认值 `www.bing.com`。非交互安装添加 `--yes` 后同样使用该默认值。
+
+安装默认加载 BBR 并将队列算法设为 `fq`。如果内核不提供 `tcp_bbr` 模块，脚本会给出警告并继续安装 Xray；如需明确关闭，可添加 `--disable-bbr` 或设置 `ENABLE_BBR=0`。
 
 Interactive installs prompt for a REALITY SNI unless `--sni` or the `SNI` environment variable is provided. Press Enter to accept the `www.bing.com` default; unattended installs with `--yes` use the same default.
 
@@ -93,11 +95,12 @@ xray-reality uninstall
 --uuid UUID          使用指定 UUID；默认随机生成
 --version VERSION    固定 Xray 版本
 --fingerprint NAME   客户端指纹，默认 chrome
---enable-bbr         启用 BBR + fq
+--enable-bbr         启用 BBR + fq（默认，兼容参数）
+--disable-bbr        不启用 BBR
 --yes                非交互确认
 ```
 
-也可以使用 `PORT`、`SNI`、`ADDRESS`、`LISTEN`、`UUID`、`XRAY_VERSION`、`FINGERPRINT` 环境变量。
+也可以使用 `PORT`、`SNI`、`ADDRESS`、`LISTEN`、`UUID`、`XRAY_VERSION`、`FINGERPRINT`、`ENABLE_BBR` 环境变量；`ENABLE_BBR` 只能是 `1` 或 `0`。
 
 ## 已验证环境 / Tested environment
 
@@ -108,6 +111,7 @@ xray-reality uninstall
 - Windows Xray 客户端通过 REALITY 节点访问公网，出口地址与 VPS 一致。
 - 同版本 `update`、`show`、`help` 管理命令。
 - Oracle Ubuntu 默认 iptables 规则下手动放行并持久化 TCP 443。
+- BBR + fq 运行时切换及开机持久化配置。
 
 Tested on a fresh Oracle Cloud Ubuntu 24.04.4 LTS x86_64 instance with systemd. Installation, configuration validation, service startup, external TCP connectivity, end-to-end REALITY proxying, same-version updates, and management commands passed.
 
