@@ -365,6 +365,9 @@ write_state() {
 install_manager() {
   local source_path="${BASH_SOURCE[0]}"
   if [[ -r "${source_path}" ]]; then
+    if [[ "$(readlink -f "${source_path}")" == "$(readlink -f "${MANAGER_BIN}" 2>/dev/null || true)" ]]; then
+      return 0
+    fi
     install -o root -g root -m 0755 "${source_path}" "${MANAGER_BIN}"
   else
     warn "无法安装管理命令；请保留当前脚本。"
