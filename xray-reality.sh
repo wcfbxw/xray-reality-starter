@@ -297,7 +297,7 @@ config_group() {
 
 activate_config() {
   local candidate group
-  candidate="$(mktemp)"
+  candidate="$(mktemp --suffix=.json)"
   TEMP_FILES+=("${candidate}")
   build_config "${candidate}"
 
